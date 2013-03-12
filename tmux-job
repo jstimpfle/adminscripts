@@ -1,0 +1,84 @@
+#!/bin/sh
+
+# Known to work under Debian Wheezy's tmux as of 2013-03-11
+# Might need adjustment for your tmux version / distribution
+#
+# Test with (be sure to not have another tmux running):
+# tmux kill-server 2>/dev/null
+# ./tmux-job "echo true ; true" testtrue
+# ./tmux-job "echo false ; false" testfalse
+# ./tmux-job "echo sleep 999 ; sleep 999" testsleep
+# tmux attach
+
+usage() {
+	cat >&2 <<'EOF'
+Usage: tmux-job [-L server-name] <shell-command> <window-name>
+EOF
+	exit 1
+}
+
+# escape variables so that the will be parsed back to themselves inside a
+# shell. bash has printf %q, but that was broken for almost a decade.
+shell_escape() {
+	printf %s\\n "$1" | sed 's/[^a-zA-Z0-9_-]/\\&/g; $!s/$/\\/'
+}
+
+if test "$1" = -L
+then
+	sockname_e=$(shell_escape "$1")
+	shift 2
+	alias tmux="tmux -L $sockname_e"
+fi
+
+[ $# -eq 2 ] || usage
+
+command_e=$(shell_escape "$1")
+windowname=$2
+windowname_e=$(shell_escape "$2")
+
+# Init server (idempotent commands)
+for s in finished failed active 
+do
+	tmux 2>/dev/null new-session -d -n help_screen -s "$s" '
+		trap "" INT TERM
+		cat <<EOF
+(This window keeps the "'"$s"'" session open; do not kill)
+
+Keybindings:
+    F1 previous-window
+    F2 next-window
+    F4 confirm-before kill-pane
+    C-F4 kill-pane
+    F5 switch-client -t active
+    F6 switch-client -t finished
+    F7 switch-client -t failed
+EOF
+		while true ; do sleep 9999999 ; done
+	'
+done
+tmux -q set-option -t active set-remain-on-exit on >/dev/null
+tmux bind-key -n F1 previous-window
+tmux bind-key -n F2 next-window
+tmux bind-key -n F4 confirm-before kill-pane
+tmux bind-key -n C-F4 kill-pane
+tmux bind-key -n F5 switch-client -t active
+tmux bind-key -n F6 switch-client -t finished
+tmux bind-key -n F7 switch-client -t failed
+
+tmux new-window -d -t active -n "$windowname" '
+	# Place cursor at the bottom for convenience
+	printf "\033[9999;1H"
+	echo "Starting job '"$windowname_e"' at $(date "+%F %T")"
+	sh -c '"$command_e"'
+	retval=$?
+	if test "$retval" -eq 0
+	then
+		tmux move-window -s active:'"$windowname_e"' -t finished:
+	else
+		tmux move-window -s active:'"$windowname_e"' -t failed:
+		tput bold
+		echo EXITCODE "$retval"
+		tput sgr0
+	fi
+	exit "$retval"
+'

@@ -2,10 +2,11 @@
 
 usage() {
 	cat >&2 <<'EOF'
-	remembered-job new <jobname> [-once] <shell-cmd>
-	remembered-job add <jobname> <host-spec>
-	remembered-job run <jobname> [<host-spec>]
-	remembered-job status <jobname> [<host-spec>]
+Usage:
+    remembered-job new <jobname> [-once] <shell-cmd>
+    remembered-job add <jobname> <host-spec>
+    remembered-job run <jobname> [<host-spec>]
+    remembered-job status <jobname> [<host-spec>]
 EOF
 	exit 1
 }
@@ -91,7 +92,7 @@ run() (
 	if test $# -eq 0 ; then
 		for i in "$queuedir"/* ; do
 			test -f "$i" || continue
-			set -- "$@" "$(basename $i)"
+			set -- "$@" "$(basename "$i")"
 		done
 	else
 		for i in "$@" ; do

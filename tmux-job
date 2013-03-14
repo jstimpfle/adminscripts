@@ -23,8 +23,7 @@ shell_escape() {
 	printf %s\\n "$1" | sed 's/[^a-zA-Z0-9_-]/\\&/g; $!s/$/\\/'
 }
 
-if test "$1" = -L
-then
+if test "$1" = -L ; then
 	sockname_e=$(shell_escape "$1")
 	shift 2
 	alias tmux="tmux -L $sockname_e"
@@ -67,12 +66,11 @@ tmux bind-key -n F7 switch-client -t failed
 
 tmux new-window -d -t active -n "$windowname" '
 	# Place cursor at the bottom for convenience
-	printf "\033[9999;1H"
+	printf "\033[$LINES;1H"
 	echo "Starting job '"$windowname_e"' at $(date "+%F %T")"
 	sh -c '"$command_e"'
 	retval=$?
-	if test "$retval" -eq 0
-	then
+	if test "$retval" -eq 0 ; then
 		tmux move-window -s active:'"$windowname_e"' -t finished:
 	else
 		tmux move-window -s active:'"$windowname_e"' -t failed:

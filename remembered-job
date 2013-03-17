@@ -4,9 +4,9 @@ usage() {
 	cat >&2 <<'EOF'
 Usage:
     remembered-job new <jobname> [-once] <shell-cmd>
-    remembered-job add <jobname> <host-spec>
-    remembered-job run <jobname> [<host-spec>]
-    remembered-job status <jobname> [<host-spec>]
+    remembered-job add <jobname> <host> [<host>...]
+    remembered-job run <jobname> [<host>...]
+    remembered-job status <jobname>
 EOF
 	exit 1
 }
@@ -135,4 +135,4 @@ jobdir=$rj_dir/$job
 queuedir=$jobdir/queue
 resultsdir=$jobdir/results
 
-case "$1" in new|add|run|status) "$@" ;; *) usage ;; esac
+case $1 in new|add|run|status) "$@" ;; *) usage ;; esac

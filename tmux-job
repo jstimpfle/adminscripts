@@ -65,9 +65,10 @@ tmux bind-key -n F6 switch-client -t finished
 tmux bind-key -n F7 switch-client -t failed
 
 tmux new-window -d -t active -n "$windowname" '
-	# Place cursor at the bottom for convenience
-	printf "\033[$LINES;1H"
-	echo "Starting job '"$windowname_e"' at $(date "+%F %T")"
+	# Put cursor 2 lines down (workaround because my tmux in the end adds 2
+	# status lines *at the bottom* of the terminal)
+	printf "\033[2;1H"
+	echo "Starting job "'"$windowname_e"'" at $(date "+%F %T")"
 	sh -c '"$command_e"'
 	retval=$?
 	if test "$retval" -eq 0 ; then

@@ -6,9 +6,16 @@ Usage:
     remembered-job new <jobname> [-once] <shell-cmd>
     remembered-job add <jobname> <host> [<host>...]
     remembered-job run <jobname> [<host>...]
-    remembered-job status <jobname>
 EOF
 	exit 1
+}
+
+perror() {
+	printf %s\\n "remembered-job: $*" >&2
+}
+
+plog() {
+	printf %s\\n "$*" >&2
 }
 
 shell_escape() {
@@ -16,123 +23,152 @@ shell_escape() {
 }
 
 job_must_exist() {
-	if ! test -d "$jobdir"; then
-		echo "Job does not exist: $job"
+	if ! [ -d "$jobdir" ]; then
+		perror "Job does not exist: $job"
 		exit 1
 	fi
-	if ! test -d "$queuedir" \
-	    -a -d "$resultsdir" \
-	    -a -f "$jobdir"/command; then
-		echo >&2 "Error: Job directories/files not properly set up."
+	if ! [ -d "$jobdir"/queue \
+	    -a -d "$jobdir"/results \
+	    -a -f "$jobdir"/command ]; then
+		perror "Error: Job directories/files not properly set up."
 		exit 1
 	fi
 }
 
 new() (
-	set -e
-	if test $# = 2; then
+	if [ -d "$jobdir" ]; then
+		perror "Can't create: job exists"
+		exit 1
+	fi
+
+	if [ $# = 2 ]; then
 		once=false
 		command=$2
-	elif test $# = 3 -a "$2" = -once; then
+	elif [ $# = 3 -a "$2" = -once ]; then
 		once=true
 		command=$3
 	else
 		usage
 	fi
-	if test -d "$jobdir"; then
-		echo >&2 "Error: Can't create: job exists"
+
+	mkdir "$jobdir" "$jobdir"/queue "$jobdir"/results \
+	&& if $once ; then touch "$jobdir"/once ; fi \
+	&& printf %s\\n "$command" > "$jobdir"/command \
+
+	if [ $? -ne 0 ]; then
+		perror "Failed to create all files for $job. (Some files may be left)"
 		exit 1
 	fi
-	mkdir "$jobdir" "$queuedir" "$resultsdir"
-	$once && touch "$jobdir"/once
-	printf %s\\n "$command" > "$jobdir"/command
 )
 
 add() (
-	set -e
-	test $# -ge 2 || usage
+	[ $# -ge 2 ] || usage
 	shift
+
 	job_must_exist
+
+	retval=0
 	for i in "$@"; do
-		if test -e "$resultsdir/$i"; then
-			echo >&2 "$i already added to $job; not adding."
+		if [ -e "$jobdir"/results/"$i" ]; then
+			perror "$i already added to $job; not adding."
 			continue
 		fi
-		date '+Added %F %T' > "$queuedir/$i"
-		mkdir "$resultsdir/$i"
+
+		if ! mkdir "$jobdir"/results/"$i" \
+		   || ! date '+Added %F %T' > "$jobdir"/queue/"$i"; then
+			perror "Errors occurred while adding $i to $job."
+			retval=1
+		fi
 	done
+	return $retval
 )
 
 run_one() (
 	arg=$1
-	set -e
+	argdir=$jobdir/results/$arg/
 
-	cd "$resultsdir/$arg"
-	dir=1
-	while test -d "$dir" ; do
-		dir=$((dir + 1))
-	done
-	mkdir "$dir"
-	ln -s "$dir" last
+	if ! cd "$argdir"; then
+		perror "not running $1: could not cd into $argdir."
+	fi
+
+	if ! mkdir lock; then
+		perror "$job is locked for $arg, so not running.
+(If you know what your are doing, remove the lock directory: $(pwd)/lock)"
+		exit 1
+	fi
+	trap "rmdir lock" EXIT
+
+	dir=1; while [ -d "$argdir/$dir" ]; do dir=$((dir + 1)); done
+
+	if ! mkdir "$dir" || ! ln -f -s -T "$dir" last; then
+		perror "Failed to run $job for $i: Errors while creating run environment."
+		exit 1;
+	fi
+
+	if ! cd "$dir"; then
+		perror "not running $1: could not cd into $dir."
+	fi
+	trap "rmdir ../lock" EXIT
 
 	cmd_e=$(shell_escape "$jobdir/command")
 	arg_e=$(shell_escape "$arg")
 	script -e -c "sh -- $cmd_e $arg_e" -ttimings typescript
 	ests=$?
-	if test $ests -eq 0 && test -f "$jobdir"/once ; then
+
+	if [ $ests -ne 0 ]; then
 		echo "Exitstatus $ests" > failed
-		rm "$queuedir/$arg"
+	elif [ $ests -eq 0 -a -f "$jobdir"/once ]; then
+		rm "$jobdir"/queue/"$arg"
 	fi
 )
 
 run() (
-	set -e
-	test $# -ge 1 || usage
+	[ $# -ge 1 ] || usage
 	shift
-	if test $# -eq 0 ; then
-		for i in "$queuedir"/* ; do
-			test -f "$i" || continue
-			set -- "$@" "$(basename "$i")"
+
+	job_must_exist
+
+	if [ $# -eq 0 ]; then
+		for i in "$jobdir"/queue/*; do
+			[ -f "$i" ] || continue
+			set -- "$@" "${i##*/}"
 		done
 	else
-		for i in "$@" ; do
-			if ! test -f "$queuedir/$i" ; then
-				echo >&2 "Error: $i is not scheduled for $job".
+		for i in "$@"; do
+			if ! [ -f "$jobdir"/queue/"$i" ]; then
+				perror "$i is not scheduled for $job."
 				exit 1
 			fi
 			set -- "$@" "$i"
 			shift
 		done
 	fi
-	if test $# -eq 0 ; then
-		echo >&2 "Nothing to do."
-	fi
-	for i in "$@" ; do
-		run_one "$i"
-	done
-)
 
-status() (
-	test $# -eq 1 || usage
-	echo "Queued:"
-	echo "======="
-	ls -l "$queuedir"
-	echo
-	echo "Finished:"
-	echo "========="
-	ls -l "$resultsdir"
+	if [ $# -eq 0 ]; then
+		plog "Nothing to do."
+		exit 0
+	fi
+
+	for i in "$@" ; do
+		run_one "$i" || exit
+	done
 )
 
 rj_dir=~/remembered_jobs
 
-if ! test -d "$rj_dir" ; then
-	echo >&2 "$rj_dir does not exist (or is not a directory). Aborting."
+if ! [ -d "$rj_dir" ]; then
+	perror "$rj_dir does not exist (or is not a directory). Aborting."
 	exit 1
 fi
 
 job=$2
 jobdir=$rj_dir/$job
-queuedir=$jobdir/queue
-resultsdir=$jobdir/results
 
-case $1 in new|add|run|status) "$@" ;; *) usage ;; esac
+case $1 in
+	new|add|run)
+		"$@"
+		;;
+	*)
+		usage
+		;;
+esac

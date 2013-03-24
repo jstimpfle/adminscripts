@@ -1,5 +1,13 @@
 #!/bin/sh
 
+##
+## tmux-job -- Execute job inside a tmux session configured to track its
+## success state.
+##
+## This file is part of adminscripts (https://github.com/jstimpfle/adminscripts)
+## Copyright (C) 2013, Jens Stimpfle <debian@jstimpfle.de>
+##
+
 # Known to work under Debian Wheezy's tmux as of 2013-03-11
 # Might need adjustment for your tmux version / distribution
 #
@@ -17,8 +25,8 @@ EOF
 	exit 1
 }
 
-# escape variables so that the will be parsed back to themselves inside a
-# shell. bash has printf %q, but that was broken for almost a decade.
+# escape a string so that it will be parsed back to itself inside a shell.
+# bash has printf %q, but that was broken for almost a decade.
 shell_escape() {
 	printf %s\\n "$1" | sed 's/[^a-zA-Z0-9_-]/\\&/g; $!s/$/\\/'
 }

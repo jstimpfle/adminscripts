@@ -64,6 +64,8 @@ EOF
 	'
 done
 tmux -q set-option -t active set-remain-on-exit on >/dev/null
+tmux -q set -g window-status-current-format '(#I)#F#W#[default]' >/dev/null
+tmux -q set -g window-status-format '#[fg=grey](#I)#F#W' >/dev/null
 tmux bind-key -n F1 previous-window
 tmux bind-key -n F2 next-window
 tmux bind-key -n F4 confirm-before kill-pane

@@ -1,11 +1,23 @@
 #!/bin/sh
 
+##
+## remembered-job -- Register jobs for a number of hosts and execute them in a
+## script(1) session.
+##
+## This file is part of adminscripts (https://github.com/jstimpfle/adminscripts)
+## Copyright (C) 2013, Jens Stimpfle <debian@jstimpfle.de>
+##
+
 usage() {
 	cat >&2 <<'EOF'
 Usage:
     remembered-job new <jobname> [-once] <shell-cmd>
     remembered-job add <jobname> <host> [<host>...]
     remembered-job run <jobname> [<host>...]
+    remembered-job lsh <jobname>
+    remembered-job rmh <jobname> [--purge] <host> [<host>...]
+    remembered-job lsj
+    remembered-job rmj <jobname> [-f|--force]
 EOF
 	exit 1
 }
@@ -14,12 +26,12 @@ perror() {
 	printf %s\\n "remembered-job: $*" >&2
 }
 
-plog() {
+p() {
 	printf %s\\n "$*" >&2
 }
 
 shell_escape() {
-	printf %s\\n "$1" | sed -e 's/[^a-zA-Z0-9_-]/\\&/g; $!s/$/\\/'
+	printf %s\\n "$1" | sed -e 's/[^a-zA-Z0-9_+-]/\\&/g; $!s/$/\\/'
 }
 
 job_must_exist() {
@@ -35,7 +47,7 @@ job_must_exist() {
 	fi
 }
 
-new() (
+task_new() (
 	if [ -d "$jobdir" ]; then
 		perror "Can't create: job exists"
 		exit 1
@@ -61,7 +73,7 @@ new() (
 	fi
 )
 
-add() (
+task_add() (
 	[ $# -ge 2 ] || usage
 	shift
 
@@ -89,6 +101,7 @@ run_one() (
 
 	if ! cd "$argdir"; then
 		perror "not running $1: could not cd into $argdir."
+		exit 1
 	fi
 
 	if ! mkdir lock; then
@@ -121,12 +134,17 @@ run_one() (
 
 	if [ $ests -ne 0 ]; then
 		echo "Exitstatus $ests" > failed
-	elif [ $ests -eq 0 -a -f "$jobdir"/once ]; then
-		rm "$jobdir"/queue/"$arg"
+		exit "$ests"
 	fi
+
+	if [ -f "$jobdir"/once ]; then
+		rm "$jobdir"/queue/"$arg" || exit
+	fi
+
+	> success
 )
 
-run() (
+task_run() (
 	[ $# -ge 1 ] || usage
 	shift
 
@@ -149,7 +167,7 @@ run() (
 	fi
 
 	if [ $# -eq 0 ]; then
-		plog "Nothing to do."
+		p "Nothing to do."
 		exit 0
 	fi
 
@@ -157,6 +175,74 @@ run() (
 		run_one "$i" || exit
 	done
 )
+
+task_lsh() (
+	[ $# -eq 1 ] || usage
+	job_must_exist
+	LS_COLORS=never ls "$jobdir"/queue
+)
+
+task_lsj() (
+	LS_COLORS=never ls "$rj_dir"
+)
+
+task_rmh() (
+	shift
+	[ "$1" = --purge ] && purge=true && shift || purge=false
+	[ $# -ge 1 ] || usage
+
+	job_must_exist
+	for i in "$@"; do
+		if [ ! -f "$jobdir"/queue/"$i" ]; then
+			perror "Can't remove $i: Not registered for job $job"
+			continue
+		fi
+		rm "$jobdir"/queue/"$i"
+		if $purge; then
+			rm -r "$jobdir"/results/"$i"
+		fi
+	done
+)
+
+task_rmj() (
+	shift
+	case $1 in
+	-f|--force)
+		force=true
+		shift
+		;;
+	*)
+		force=false
+		;;
+	esac
+
+	[ $# -eq 0 ] || usage
+	job_must_exist
+	if ! $force && tty >/dev/null; then
+		while true; do
+			p "Delete job $job? Please type 'yes' or 'no'"
+			read answer
+			case $answer in
+			yes)
+				break
+				;;
+			no)
+				p 'Aborted by request'
+				exit 0
+			esac
+		done
+	fi
+	rm -rf "$jobdir"
+)
+
+case $1 in
+	new|add|run|lsh|lsj|rmh|rmj)
+		;;
+	*)
+		perror "Unknown command: $1"
+		usage
+		;;
+esac
 
 rj_dir=~/remembered_jobs
 
@@ -168,11 +254,6 @@ fi
 job=$2
 jobdir=$rj_dir/$job
 
-case $1 in
-	new|add|run)
-		"$@"
-		;;
-	*)
-		usage
-		;;
-esac
+task=task_$1
+shift
+"$task" "$@"

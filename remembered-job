@@ -170,8 +170,6 @@ task_run() (
 				perror "$i is not scheduled for $job."
 				exit 1
 			fi
-			set -- "$@" "$i"
-			shift
 		done
 	fi
 

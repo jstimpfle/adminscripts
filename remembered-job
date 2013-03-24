@@ -34,7 +34,7 @@ p() {
 }
 
 shell_escape() {
-	printf %s\\n "$1" | sed -e 's/[^a-zA-Z0-9_@+-]/\\&/g; $!s/$/\\/'
+	printf %s\\n "$1" | sed -e 's/[^a-zA-Z0-9_@/+-]/\\&/g; $!s/$/\\/'
 }
 
 job_must_exist() {
@@ -138,7 +138,7 @@ run_one() (
 
 	cmd_e=$(shell_escape "$jobdir/command")
 	arg_e=$(shell_escape "$arg")
-	script -e -f -c "sh -- $cmd_e $arg_e" -ttimings typescript
+	script -e -f -c "exec sh -- $cmd_e $arg_e" -ttimings typescript
 	ests=$?
 
 	if [ $ests -ne 0 ]; then

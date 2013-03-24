@@ -45,8 +45,7 @@ windowname=$2
 windowname_e=$(shell_escape "$2")
 
 # Init server (idempotent commands)
-for s in finished failed active 
-do
+for s in finished failed active; do
 	tmux 2>/dev/null new-session -d -n help_screen -s "$s" '
 		trap "" INT TERM
 		cat <<EOF

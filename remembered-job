@@ -18,9 +18,9 @@ Usage:
     remembered-job add <jobname> <host> [<host>...]
     remembered-job run <jobname> [<host>...]
     remembered-job lsh <jobname>
-    remembered-job rmh <jobname> [--purge] <host> [<host>...]
+    remembered-job rmh <jobname> [-purge] <host> [<host>...]
     remembered-job lsj
-    remembered-job rmj <jobname> [-f|--force]
+    remembered-job rmj <jobname> [-f|-force]
 EOF
 	exit 1
 }
@@ -68,7 +68,7 @@ task_new() (
 
 	mkdir "$jobdir" "$jobdir"/queue "$jobdir"/results \
 	&& if $once ; then touch "$jobdir"/once ; fi \
-	&& printf %s\\n "$command" > "$jobdir"/command \
+	&& printf %s\\n "$command" > "$jobdir"/command
 
 	if [ $? -ne 0 ]; then
 		perror "Failed to create all files for $job. (Some files may be left)"
@@ -191,7 +191,7 @@ task_lsj() (
 
 task_rmh() (
 	shift
-	[ "$1" = --purge ] && purge=true && shift || purge=false
+	[ "$1" = -purge ] && purge=true && shift || purge=false
 	[ $# -ge 1 ] || usage
 
 	job_must_exist
@@ -210,7 +210,7 @@ task_rmh() (
 task_rmj() (
 	shift
 	case $1 in
-	-f|--force)
+	-f|-force)
 		force=true
 		shift
 		;;

@@ -34,7 +34,7 @@ p() {
 }
 
 shell_escape() {
-	printf %s\\n "$1" | sed -e 's/[^a-zA-Z0-9_+-]/\\&/g; $!s/$/\\/'
+	printf %s\\n "$1" | sed -e 's/[^a-zA-Z0-9_@+-]/\\&/g; $!s/$/\\/'
 }
 
 job_must_exist() {
@@ -102,21 +102,27 @@ run_one() (
 	arg=$1
 	argdir=$jobdir/results/$arg
 
+	# On dash at least, I need this to have EXIT traps executed
+	# when exiting on a signal
+	for i in INT TERM HUP; do
+		trap "perror \"SIG$i received. Exiting.\"; exit 1" "$i"
+	done
+
 	if ! cd "$argdir"; then
 		perror "not running $1: could not cd into $argdir."
 		exit 1
 	fi
 
-	if ! mkdir lock; then
-		if [ -d lock ]; then
-			perror "Lock directory $argdir/lock exists already. If you are sure the job is not running, remove it manually and retry."
+	if ! mkdir lockdir; then
+		if [ -d lockdir ]; then
+			perror "Lock directory $argdir/lockdir exists already. If you are sure the job is not running, remove it manually and retry."
 		else
-			perror "Failed to create lock directory $argdir/lock"
+			perror "Failed to create lock directory $argdir/lockdir"
 		fi
 		perror "Not running job '$job' with argument '$arg' due to previous errors"
 		exit 1
 	fi
-	trap "rmdir lock" EXIT
+	trap "rmdir lockdir" EXIT
 
 	dir=1; while [ -d "$argdir/$dir" ]; do dir=$((dir + 1)); done
 
@@ -128,11 +134,11 @@ run_one() (
 	if ! cd "$dir"; then
 		perror "Not running job '$job' with argument '$arg' due to previous errors"
 	fi
-	trap "rmdir ../lock" EXIT
+	trap "rmdir ../lockdir" EXIT
 
 	cmd_e=$(shell_escape "$jobdir/command")
 	arg_e=$(shell_escape "$arg")
-	script -e -c "sh -- $cmd_e $arg_e" -ttimings typescript
+	script -e -f -c "sh -- $cmd_e $arg_e" -ttimings typescript
 	ests=$?
 
 	if [ $ests -ne 0 ]; then

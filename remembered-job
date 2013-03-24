@@ -7,6 +7,9 @@
 ## This file is part of adminscripts (https://github.com/jstimpfle/adminscripts)
 ## Copyright (C) 2013, Jens Stimpfle <debian@jstimpfle.de>
 ##
+##
+## Notable dependencies: Needs a recent script(1) (normally from bsdutils
+## package) which supports the -e option.
 
 usage() {
 	cat >&2 <<'EOF'

@@ -1,25 +1,5 @@
 This example shows how to upgrade many clients simultaneously in an attended
-and logged way. We need two little helper scripts:
-
-launch-upgrades.sh
-==================
-
-	#!/bin/sh
-	
-	if [ $# -eq 0 ]; then
-		echo >&2 "Usage: $0 <hosts...>"
-		exit 1
-	fi
-	
-	PATH=/root/scripte/:$PATH
-	
-	echo >&2 "Jobs will be started inside tmux session. Do 'tmux attach' to interact"
-	
-	for host in "$@"; do
-		host_e=$(printf %s "$host" | sed 's/[^0-9a-zA-Z_+-]/\\&/g')
-		tmux-job "exec remembered-job run upgradehosts $host_e" upgrade-"$host"
-	done
-
+and logged way. We define a little helper scripts to do the actual upgrade:
 
 upgrade-host.sh
 ===============
@@ -48,11 +28,22 @@ upgrade-host.sh
 Now let's prepare:
 
 	remembered-job new upgradehosts 'exec upgrade-host.sh "$1"'
-	remembered-job add upgradehosts <host>...
+	remembered-job add upgradehosts 
 
 Replace <host>... with all the hostnames with which you want to launch upgrade
 jobs, each host as a single argument.
 
-To start an upgrade-session, type:
+Let's start an upgrade session, all hosts sequentially:
 
-	launch-upgrades.sh $(remembered-job lsh upgradehosts)
+	remembered-job run upgradehosts
+
+Let's start an upgrade session for all hosts in parallel, inside a tmux session
+
+	remembered-job tmux upgradehosts
+
+We can also pick only certain hosts
+
+	remembered-job run upgradehosts host1
+
+or
+	remembered-job tmux upgradehosts host1
